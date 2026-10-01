@@ -42,7 +42,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snap.hasError) {
-                  return const Center(child: Text('البحث يحتاج اتصالًا بالإنترنت'));
+                  return const Center(child: Text('حدث خطأ أثناء البحث في المصحف'));
                 }
                 final hits = snap.data!;
                 if (hits.isEmpty) return const Center(child: Text('لا نتائج'));

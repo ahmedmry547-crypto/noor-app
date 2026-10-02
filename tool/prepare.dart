@@ -75,5 +75,23 @@ void main() {
   final any = Directory('android/app/src/main/res/mipmap-anydpi-v26');
   if (any.existsSync()) any.deleteSync(recursive: true);
 
+  // Some newest dependencies require compileSdk 37 -> raise it for the app.
+  for (final name in ['android/app/build.gradle.kts', 'android/app/build.gradle']) {
+    final g = File(name);
+    if (!g.existsSync()) continue;
+    var t = g.readAsStringSync();
+    t = t.replaceAllMapped(
+        RegExp(r'compileSdk(Version)?\s*=?\s*flutter\.compileSdkVersion'),
+        (m) => 'compileSdk = 37');
+    g.writeAsStringSync(t);
+  }
+  final props = File('android/gradle.properties');
+  var ptxt = props.existsSync() ? props.readAsStringSync() : '';
+  if (!ptxt.contains('suppressUnsupportedCompileSdk')) {
+    if (ptxt.isNotEmpty && !ptxt.endsWith('\n')) ptxt += '\n';
+    ptxt += 'android.suppressUnsupportedCompileSdk=37\n';
+    props.writeAsStringSync(ptxt);
+  }
+
   stdout.writeln('Android project patched.');
 }

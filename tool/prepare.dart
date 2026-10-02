@@ -82,7 +82,7 @@ void main() {
   keep.parent.createSync(recursive: true);
   keep.writeAsStringSync('''<?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/ic_stat_quran" />
+    tools:keep="@drawable/*" />
 ''');
 
   // Some newest dependencies require compileSdk 37 -> raise it for the app.

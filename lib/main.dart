@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'core/main_shell.dart';
 import 'core/theme/app_theme.dart';
@@ -15,11 +16,20 @@ Future<void> main() async {
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.ayatquran.audio',
     androidNotificationChannelName: 'تشغيل القرآن',
+    androidNotificationChannelDescription: 'تشغيل القرآن في الخلفية والتحكم من الإشعارات',
     androidNotificationOngoing: true,
     androidStopForegroundOnPause: false,
     androidNotificationClickStartsActivity: true,
-    androidNotificationIcon: 'drawable/ic_stat_quran',
+    // Use Android's known-good launcher resource for the notification small icon.
+    // The selected reciter artwork is still supplied through MediaItem.artUri.
+    androidNotificationIcon: 'mipmap/ic_launcher',
+    androidShowNotificationBadge: true,
   );
+  // Android 13+: request notification permission once at startup.
+  // This is separate from the media artwork and only controls notification visibility.
+  try {
+    await Permission.notification.request();
+  } catch (_) {}
   runApp(const ProviderScope(child: AyatQuranApp()));
 }
 

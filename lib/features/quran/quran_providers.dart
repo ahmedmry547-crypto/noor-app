@@ -4,19 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/utils.dart';
-import 'quran_api.dart';
 
-final quranApiProvider = Provider((ref) => QuranApi());
-
-final chaptersProvider =
-    FutureProvider<List<Chapter>>((ref) => ref.read(quranApiProvider).chapters());
-
-final versesProvider = FutureProvider.family<List<Verse>, int>(
-    (ref, id) => ref.read(quranApiProvider).verses(id));
+export 'quran_api.dart' show quranDataProvider;
 
 final quranFontSizeProvider = StateProvider<double>((ref) => 28);
 final tajweedOnProvider = StateProvider<bool>((ref) => true);
 
+/// true = whole Mushaf page fits on screen; false = bigger text, scrollable.
+final quranFitProvider = StateProvider<bool>((ref) => true);
+
+/// verses read per day: { "2026-9-30": 42 }
 final quranStatsProvider =
     NotifierProvider<QuranStats, Map<String, int>>(QuranStats.new);
 

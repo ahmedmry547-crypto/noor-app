@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../core/providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../quran/continue_card.dart';
 import '../data/prayer_providers.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -18,7 +19,7 @@ class HomeScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('نور'),
+        title: const Text('آيات القرآن'),
         actions: [
           Icon(isDark ? Icons.dark_mode : Icons.light_mode, size: 20),
           Switch(
@@ -30,9 +31,11 @@ class HomeScreen extends ConsumerWidget {
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: const [
-          _DateHeader(),
-          SizedBox(height: 12),
+        children: [
+          const _DateHeader(),
+          const SizedBox(height: 12),
+          const ContinueReadingCard(),
+          const SizedBox(height: 12),
           _NextPrayerCard(),
           SizedBox(height: 12),
           _PrayerTimesRow(),

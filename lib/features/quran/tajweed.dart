@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/utils.dart';
@@ -23,16 +24,16 @@ const _colors = <String, Color>{
 };
 
 const tajweedLegend = <(String, Color)>[
-  ('مد طبيعي (حركتان)', Color(0xFFFF9800)),
-  ('مد جائز (2 / 4 / 6)', Color(0xFFFF7043)),
-  ('مد واجب (4-5)', Color(0xFFE53935)),
-  ('مد لازم (6)', Color(0xFFC62828)),
+  ('مد طبيعي', Color(0xFFFF9800)),
+  ('مد جائز', Color(0xFFFF7043)),
+  ('مد واجب', Color(0xFFE53935)),
+  ('مد لازم', Color(0xFFC62828)),
   ('قلقلة', Color(0xFF29B6F6)),
   ('إخفاء', Color(0xFFEC407A)),
   ('إقلاب', Color(0xFFAB47BC)),
   ('إدغام', Color(0xFF66BB6A)),
   ('غنّة', Color(0xFFFFCA28)),
-  ('حرف لا يُنطق / همزة وصل', Color(0xFF9E9E9E)),
+  ('لا يُنطق', Color(0xFF9E9E9E)),
 ];
 
 final _endRe = RegExp(r'<span[^>]*class=["\x27]?end["\x27]?[^>]*>.*?</span>', dotAll: true);
@@ -41,26 +42,62 @@ final _tagRe = RegExp(
     dotAll: true);
 final _anyTag = RegExp(r'<[^>]+>');
 
-List<InlineSpan> tajweedSpans(String html, int number, bool colored, Color endColor) {
+/// Verse text with diacritics, markup removed.
+String plainText(String html) =>
+    html.replaceAll(_endRe, '').replaceAll(_anyTag, '').trim();
+
+final _diacritics = RegExp('[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]');
+
+/// For searching: strips tashkeel/Quranic marks and unifies letter forms.
+String normalizeArabic(String s) => s
+    .replaceAll(_diacritics, '')
+    .replaceAll(RegExp('[\u0671\u0622\u0623\u0625]'), '\u0627')
+    .replaceAll('\u0649', '\u064A')
+    .replaceAll('\u0629', '\u0647')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
+/// Builds the spans of one verse (tajweed-colored) ending with the ﴿n﴾ marker.
+List<InlineSpan> verseSpans(
+  String html,
+  int number, {
+  required bool colored,
+  required Color endColor,
+  GestureRecognizer? recognizer,
+  Color? background,
+}) {
+  TextStyle? style(Color? c) =>
+      (c == null && background == null) ? null : TextStyle(color: c, backgroundColor: background);
+
   final clean = html.replaceAll(_endRe, '');
   final spans = <InlineSpan>[];
   var last = 0;
   for (final m in _tagRe.allMatches(clean)) {
     if (m.start > last) {
-      spans.add(TextSpan(text: clean.substring(last, m.start).replaceAll(_anyTag, '')));
+      spans.add(TextSpan(
+        text: clean.substring(last, m.start).replaceAll(_anyTag, ''),
+        style: style(null),
+        recognizer: recognizer,
+      ));
     }
     spans.add(TextSpan(
       text: m.group(2)!.replaceAll(_anyTag, ''),
-      style: colored ? TextStyle(color: _colors[m.group(1)]) : null,
+      style: style(colored ? _colors[m.group(1)] : null),
+      recognizer: recognizer,
     ));
     last = m.end;
   }
   if (last < clean.length) {
-    spans.add(TextSpan(text: clean.substring(last).replaceAll(_anyTag, '')));
+    spans.add(TextSpan(
+      text: clean.substring(last).replaceAll(_anyTag, ''),
+      style: style(null),
+      recognizer: recognizer,
+    ));
   }
   spans.add(TextSpan(
     text: ' \uFD3F${toArabicDigits(number)}\uFD3E ',
-    style: TextStyle(color: endColor),
+    style: style(endColor),
+    recognizer: recognizer,
   ));
   return spans;
 }

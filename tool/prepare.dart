@@ -1,40 +1,79 @@
 import 'dart:io';
 
-/// Adds required permissions, Arabic app name and the supplied launcher icon
-/// to the generated Android project.
+/// Patches the generated Android project: permissions, app name, background
+/// audio service, launcher + notification icons, MainActivity.
 void main() {
-  final manifest = File('android/app/src/main/AndroidManifest.xml');
-  var s = manifest.readAsStringSync();
-  if (!s.contains('ACCESS_FINE_LOCATION')) {
+  final f = File('android/app/src/main/AndroidManifest.xml');
+  var s = f.readAsStringSync();
+
+  if (!s.contains('xmlns:tools')) {
+    s = s.replaceFirst('<manifest ',
+        '<manifest xmlns:tools="http://schemas.android.com/tools" ');
+  }
+  if (!s.contains('FOREGROUND_SERVICE_MEDIA_PLAYBACK')) {
     s = s.replaceFirstMapped(
       RegExp(r'<manifest[^>]*>'),
       (m) => '${m[0]}\n'
           '    <uses-permission android:name="android.permission.INTERNET"/>\n'
           '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n'
-          '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>',
+          '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n'
+          '    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n'
+          '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n'
+          '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>\n'
+          '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
     );
   }
-  s = s.replaceFirst('android:label="noor"', 'android:label="نور القرآن الكريم"');
-  manifest.writeAsStringSync(s);
-
-  final source = File('tool/app_icon.png');
-  if (!source.existsSync()) {
-    throw StateError('tool/app_icon.png is missing');
+  // App name shown on the phone.
+  s = s.replaceFirst(RegExp(r'android:label="[^"]*"'),
+      'android:label="آيات القرآن | Ayat Quran"');
+  if (!s.contains('usesCleartextTraffic')) {
+    s = s.replaceFirst('<application',
+        '<application\n        android:usesCleartextTraffic="true"');
   }
-  const densities = {
-    'mipmap-mdpi': 48,
-    'mipmap-hdpi': 72,
-    'mipmap-xhdpi': 96,
-    'mipmap-xxhdpi': 144,
-    'mipmap-xxxhdpi': 192,
-  };
-  for (final entry in densities.entries) {
-    final dir = Directory('android/app/src/main/res/${entry.key}')..createSync(recursive: true);
-    final sized = File('tool/app_icon_${entry.value}.png');
-    final iconSource = sized.existsSync() ? sized : source;
-    iconSource.copySync('${dir.path}/ic_launcher.png');
-    iconSource.copySync('${dir.path}/ic_launcher_round.png');
+  if (!s.contains('com.ryanheise.audioservice.AudioService')) {
+    s = s.replaceFirst('</application>', '''
+    <service android:name="com.ryanheise.audioservice.AudioService"
+        android:foregroundServiceType="mediaPlayback"
+        android:exported="true" tools:ignore="Instantiatable">
+        <intent-filter>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent-filter>
+    </service>
+    <receiver android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+        android:exported="true" tools:ignore="Instantiatable">
+        <intent-filter>
+            <action android:name="android.intent.action.MEDIA_BUTTON" />
+        </intent-filter>
+    </receiver>
+</application>''');
+  }
+  f.writeAsStringSync(s);
+
+  // MainActivity must extend AudioServiceActivity for background audio.
+  final srcDir = Directory('android/app/src/main');
+  for (final e in srcDir.listSync(recursive: true)) {
+    if (e is File && e.path.endsWith('MainActivity.kt')) {
+      final pkg = RegExp(r'package\s+([\w.]+)').firstMatch(e.readAsStringSync())![1];
+      e.writeAsStringSync('package $pkg\n\n'
+          'import com.ryanheise.audioservice.AudioServiceActivity\n\n'
+          'class MainActivity : AudioServiceActivity()\n');
+      stdout.writeln('MainActivity patched ($pkg).');
+    }
   }
 
-  stdout.writeln('Manifest and launcher icon patched.');
+  // Copy launcher + notification icons.
+  final res = Directory('tool/res');
+  for (final e in res.listSync(recursive: true)) {
+    if (e is File) {
+      final rel = e.path.substring(res.path.length + 1);
+      final dest = File('android/app/src/main/res/$rel');
+      dest.parent.createSync(recursive: true);
+      e.copySync(dest.path);
+    }
+  }
+  // Remove any adaptive-icon XML that would shadow our PNG launcher icon.
+  final any = Directory('android/app/src/main/res/mipmap-anydpi-v26');
+  if (any.existsSync()) any.deleteSync(recursive: true);
+
+  stdout.writeln('Android project patched.');
 }

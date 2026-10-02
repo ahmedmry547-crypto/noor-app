@@ -1,72 +1,114 @@
-import 'package:quran_data_dart/quran.dart';
+import 'dart:convert';
 
-class Chapter {
-  Chapter(this.id, this.name, this.versesCount, this.place);
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'tajweed.dart';
+
+/// Quran data is embedded in the APK (assets/quran/quran_data.json),
+/// so nothing here needs the internet.
+class ChapterInfo {
+  const ChapterInfo(this.id, this.name, this.place, this.versesCount);
   final int id;
   final String name;
-  final int versesCount;
   final String place;
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name_arabic': name,
-        'verses_count': versesCount,
-        'revelation_place': place,
-      };
-
-  String get placeAr => place == 'Medinan' ? 'مدنية' : 'مكية';
+  final int versesCount;
+  String get placeAr => place == 'madinah' ? 'مدنية' : 'مكية';
 }
 
-class Verse {
-  Verse(this.number, this.html);
+class VerseRec {
+  VerseRec(this.chapter, this.number, this.page, this.juz, this.html);
+  final int chapter;
   final int number;
+  final int page;
+  final int juz;
   final String html;
+  String? _plain;
+  String? _norm;
+  String get plain => _plain ??= plainText(html);
+  String get normalized => _norm ??= normalizeArabic(plain);
 }
 
-class SearchHit {
-  SearchHit(this.key, this.text);
-  final String key;
-  final String text;
-  int get chapter => int.parse(key.split(':')[0]);
-  int get verse => int.parse(key.split(':')[1]);
-}
-
-/// القرآن النصي يعمل أوفلاين بالكامل.
-/// البيانات مضمّنة في quran_data_dart ولا يتم طلب نص السور من الإنترنت.
-class QuranApi {
-  Future<List<Chapter>> chapters() async {
-    final data = await QuranService.getQuranData();
-    return data.surahs
-        .map((s) => Chapter(
-              s.id,
-              s.name,
-              s.numberOfAyahs,
-              s.revelationType,
-            ))
-        .toList(growable: false);
-  }
-
-  Future<List<Verse>> verses(int chapter) async {
-    final surah = await QuranService.getSurah(chapter);
-    return surah.ayat
-        .map((ayah) => Verse(ayah.id, ayah.text))
-        .toList(growable: false);
-  }
-
-  Future<List<SearchHit>> search(String q) async {
-    final query = q.trim();
-    if (query.isEmpty) return const [];
-
-    final data = await QuranService.getQuranData();
-    final hits = <SearchHit>[];
-    for (final surah in data.surahs) {
-      for (final ayah in surah.ayat) {
-        if (ayah.text.contains(query)) {
-          hits.add(SearchHit('${surah.id}:${ayah.id}', ayah.text));
-          if (hits.length >= 20) return hits;
-        }
-      }
+class QuranData {
+  QuranData(this.chapters, this.verses) {
+    var maxPage = 0;
+    for (var i = 0; i < verses.length; i++) {
+      final v = verses[i];
+      _chapterFirst.putIfAbsent(v.chapter, () => i);
+      if (v.page > maxPage) maxPage = v.page;
     }
-    return hits;
+    pageCount = maxPage;
+    _pageFirst = List.filled(maxPage + 2, -1);
+    _pageLast = List.filled(maxPage + 2, -2);
+    for (var i = 0; i < verses.length; i++) {
+      final p = verses[i].page;
+      if (_pageFirst[p] == -1) _pageFirst[p] = i;
+      _pageLast[p] = i;
+    }
+    for (final c in chapters) {
+      _byId[c.id] = c;
+    }
+  }
+
+  factory QuranData.fromJson(Map<String, dynamic> j) {
+    final chapters = (j['c'] as List).map((e) {
+      final l = e as List;
+      return ChapterInfo(l[0] as int, l[1] as String, l[2] as String, l[3] as int);
+    }).toList();
+    final verses = (j['v'] as List).map((e) {
+      final l = e as List;
+      return VerseRec(l[0] as int, l[1] as int, l[2] as int, l[3] as int, l[4] as String);
+    }).toList();
+    return QuranData(chapters, verses);
+  }
+
+  final List<ChapterInfo> chapters;
+  final List<VerseRec> verses;
+  late final int pageCount;
+  late final List<int> _pageFirst;
+  late final List<int> _pageLast;
+  final Map<int, int> _chapterFirst = {};
+  final Map<int, ChapterInfo> _byId = {};
+  List<VerseRec?>? _juzFirst;
+
+  ChapterInfo chapter(int id) => _byId[id] ?? ChapterInfo(id, 'سورة $id', 'makkah', 0);
+
+  List<VerseRec> versesOfPage(int page) {
+    if (page < 1 || page > pageCount || _pageFirst[page] < 0) return const [];
+    return verses.sublist(_pageFirst[page], _pageLast[page] + 1);
+  }
+
+  VerseRec? verse(int c, int n) {
+    final first = _chapterFirst[c];
+    if (first == null) return null;
+    final i = first + n - 1;
+    if (i >= 0 && i < verses.length && verses[i].chapter == c && verses[i].number == n) {
+      return verses[i];
+    }
+    for (final v in verses) {
+      if (v.chapter == c && v.number == n) return v;
+    }
+    return null;
+  }
+
+  int firstPageOfChapter(int c) {
+    final i = _chapterFirst[c];
+    return i == null ? 1 : verses[i].page;
+  }
+
+  VerseRec? firstVerseOfJuz(int juz) {
+    _juzFirst ??= () {
+      final list = List<VerseRec?>.filled(32, null);
+      for (final v in verses) {
+        if (v.juz >= 1 && v.juz <= 31 && list[v.juz] == null) list[v.juz] = v;
+      }
+      return list;
+    }();
+    return _juzFirst![juz];
   }
 }
+
+final quranDataProvider = FutureProvider<QuranData>((ref) async {
+  final raw = await rootBundle.loadString('assets/quran/quran_data.json');
+  return QuranData.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+});

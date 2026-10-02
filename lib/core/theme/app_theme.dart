@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const _seed = Color(0xFF1F7A5C);
@@ -22,9 +21,9 @@ class AppTheme {
   }
 
   static ThemeData _base(ColorScheme scheme, Color bg) {
-    final text = GoogleFonts.cairoTextTheme(
-      ThemeData(brightness: scheme.brightness).textTheme,
-    ).apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
+    final text = ThemeData(brightness: scheme.brightness)
+        .textTheme
+        .apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
@@ -65,4 +64,41 @@ class AppCard extends StatelessWidget {
       child: child,
     );
   }
+}
+
+
+/// Colors for the Mushaf page (cream paper in light mode, pure black in OLED).
+class MushafColors {
+  const MushafColors({
+    required this.outerBg,
+    required this.page,
+    required this.text,
+    required this.frameOuter,
+    required this.frameInner,
+    required this.accent,
+    required this.highlight,
+  });
+  final Color outerBg, page, text, frameOuter, frameInner, accent, highlight;
+
+  static const light = MushafColors(
+    outerBg: Color(0xFFFCFAF2),
+    page: Color(0xFFFCFAF2),
+    text: Color(0xFF111111),
+    frameOuter: Color(0xFF2AA6A0),
+    frameInner: Color(0xFFD4A94C),
+    accent: Color(0xFF1F7A5C),
+    highlight: Color(0x66F2C94C),
+  );
+  static const dark = MushafColors(
+    outerBg: Color(0xFF000000),
+    page: Color(0xFF000000),
+    text: Color(0xFFEDE8D8),
+    frameOuter: Color(0xFF1B5E5A),
+    frameInner: Color(0xFF8A6D2B),
+    accent: Color(0xFFD4AF37),
+    highlight: Color(0x55C9A227),
+  );
+
+  static MushafColors of(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? dark : light;
 }

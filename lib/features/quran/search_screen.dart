@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils.dart';
+import 'continue_card.dart';
 import 'quran_api.dart';
-import 'quran_providers.dart';
-import 'reader_screen.dart';
+import 'reading_state.dart';
+import 'tajweed.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -14,66 +15,73 @@ class SearchScreen extends ConsumerStatefulWidget {
 }
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
-  Future<List<SearchHit>>? _future;
+  List<VerseRec> _results = const [];
+  String _q = '';
 
   void _run(String q) {
-    if (q.trim().isEmpty) return;
-    setState(() => _future = ref.read(quranApiProvider).search(q.trim()));
+    final data = ref.read(quranDataProvider).valueOrNull;
+    final nq = normalizeArabic(q);
+    if (data == null || nq.length < 2) {
+      setState(() {
+        _q = q;
+        _results = const [];
+      });
+      return;
+    }
+    final found = <VerseRec>[];
+    for (final v in data.verses) {
+      if (v.normalized.contains(nq)) {
+        found.add(v);
+        if (found.length >= 100) break;
+      }
+    }
+    setState(() {
+      _q = q;
+      _results = found;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final data = ref.watch(quranDataProvider).valueOrNull;
     return Scaffold(
       appBar: AppBar(
         title: TextField(
           autofocus: true,
           textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(hintText: 'ابحث في القرآن...', border: InputBorder.none),
-          onSubmitted: _run,
+          decoration: const InputDecoration(hintText: 'ابحث في القرآن (بدون إنترنت)...', border: InputBorder.none),
+          onChanged: _run,
         ),
       ),
-      body: _future == null
-          ? const Center(child: Text('اكتب كلمة أو جزء من آية'))
-          : FutureBuilder<List<SearchHit>>(
-              future: _future,
-              builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snap.hasError) {
-                  return const Center(child: Text('حدث خطأ أثناء البحث في المصحف'));
-                }
-                final hits = snap.data!;
-                if (hits.isEmpty) return const Center(child: Text('لا نتائج'));
-                return ListView.separated(
+      body: _q.trim().length < 2
+          ? const Center(child: Text('اكتب كلمة أو جزءًا من آية'))
+          : _results.isEmpty
+              ? const Center(child: Text('لا نتائج'))
+              : ListView.separated(
                   padding: const EdgeInsets.all(16),
-                  itemCount: hits.length,
+                  itemCount: _results.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (_, i) {
-                    final h = hits[i];
+                    final v = _results[i];
                     return InkWell(
                       borderRadius: BorderRadius.circular(20),
-                      onTap: () {
-                        final list = ref.read(chaptersProvider).value;
-                        if (list == null) return;
-                        final c = list.firstWhere((c) => c.id == h.chapter);
-                        Navigator.push(context,
-                            MaterialPageRoute(builder: (_) => ReaderScreen(chapter: c)));
-                      },
+                      onTap: () =>
+                          openMushaf(context, v.page, highlight: VerseRef(v.chapter, v.number)),
                       child: AppCard(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(h.text, style: const TextStyle(fontSize: 18, height: 1.9)),
+                          Text(v.plain,
+                              style: const TextStyle(fontFamily: 'AmiriQuran', fontSize: 20, height: 1.9)),
                           const SizedBox(height: 6),
-                          Text('${toArabicDigits(h.chapter)} : ${toArabicDigits(h.verse)}',
-                              style: TextStyle(color: cs.primary, fontSize: 12)),
+                          Text(
+                            'سورة ${data?.chapter(v.chapter).name ?? v.chapter} • الآية ${toArabicDigits(v.number)} • ص ${toArabicDigits(v.page)}',
+                            style: TextStyle(color: cs.primary, fontSize: 12),
+                          ),
                         ]),
                       ),
                     );
                   },
-                );
-              },
-            ),
+                ),
     );
   }
 }

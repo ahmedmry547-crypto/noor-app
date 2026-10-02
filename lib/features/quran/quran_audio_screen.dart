@@ -275,10 +275,13 @@ class _MoshafSurahsScreenState extends ConsumerState<MoshafSurahsScreen> {
             ?.firstWhere((s) => s.id == surahId, orElse: () => const Mp3QuranSurah(id: 0, name: '', makkia: true))
             .name ??
         '';
+    final namesList = ref.read(quranAudioSurahsProvider).valueOrNull ?? const <Mp3QuranSurah>[];
     await ref.read(quranAudioControllerProvider.notifier).toggle(
           widget.moshaf,
           surahId,
           api.audioUrl(widget.moshaf, surahId),
+          reciterName: widget.reciter.name,
+          surahNames: {for (final x in namesList) x.id: x.name},
         );
     if (!mounted) return;
     final error = ref.read(quranAudioControllerProvider).error;

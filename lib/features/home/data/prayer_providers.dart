@@ -35,8 +35,9 @@ Future<Coordinates> _coords() async {
     }
     if (perm == LocationPermission.denied ||
         perm == LocationPermission.deniedForever) throw 'denied';
-    final p = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.low));
+    // Keep this call compatible with the Geolocator version resolved by CI.
+    // The default platform settings are sufficient for prayer-time coordinates.
+    final p = await Geolocator.getCurrentPosition();
     return Coordinates(p.latitude, p.longitude);
   } catch (_) {
     return Coordinates(30.0444, 31.2357);

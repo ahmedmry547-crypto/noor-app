@@ -75,6 +75,16 @@ void main() {
   final any = Directory('android/app/src/main/res/mipmap-anydpi-v26');
   if (any.existsSync()) any.deleteSync(recursive: true);
 
+  // Release builds can let R8/resource shrinking remove a notification icon
+  // because just_audio_background refers to it by resource name at runtime.
+  // Keep our custom media-notification icon explicitly.
+  final keep = File('android/app/src/main/res/raw/keep.xml');
+  keep.parent.createSync(recursive: true);
+  keep.writeAsStringSync('''<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_quran" />
+''');
+
   // Some newest dependencies require compileSdk 37 -> raise it for the app.
   for (final name in ['android/app/build.gradle.kts', 'android/app/build.gradle']) {
     final g = File(name);

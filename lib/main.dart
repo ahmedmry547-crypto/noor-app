@@ -16,6 +16,8 @@ Future<void> main() async {
     androidNotificationChannelId: 'com.ayatquran.audio',
     androidNotificationChannelName: 'تشغيل القرآن',
     androidNotificationOngoing: true,
+    androidStopForegroundOnPause: false,
+    androidNotificationClickStartsActivity: true,
     androidNotificationIcon: 'drawable/ic_stat_quran',
   );
   runApp(const ProviderScope(child: AyatQuranApp()));

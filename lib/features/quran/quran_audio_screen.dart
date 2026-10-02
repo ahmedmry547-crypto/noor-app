@@ -219,6 +219,154 @@ class ReciterMoshafScreen extends StatelessWidget {
   }
 }
 
+
+/// Full in-app playback controls. Android notification controls are supplied
+/// by just_audio_background using the same AudioPlayer instance.
+class QuranAudioPlayerCard extends ConsumerWidget {
+  const QuranAudioPlayerCard({super.key});
+
+  String _time(Duration value) {
+    final totalSeconds = value.inSeconds.clamp(0, 359999);
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    final hours = minutes ~/ 60;
+    final mm = (minutes % 60).toString().padLeft(2, '0');
+    final ss = seconds.toString().padLeft(2, '0');
+    return hours > 0 ? '$hours:$mm:$ss' : '$minutes:$ss';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final audio = ref.watch(quranAudioControllerProvider);
+    final controller = ref.read(quranAudioControllerProvider.notifier);
+    if (audio.currentKey == null) return const SizedBox.shrink();
+
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: AppCard(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: cs.primaryContainer,
+                  child: Icon(Icons.headphones_rounded, color: cs.onPrimaryContainer),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        audio.currentTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                        textDirection: TextDirection.rtl,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        audio.currentArtist.isEmpty ? 'القرآن الكريم' : audio.currentArtist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textDirection: TextDirection.rtl,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            StreamBuilder<Duration?>(
+              stream: controller.durationStream,
+              builder: (context, durationSnap) {
+                final duration = durationSnap.data ?? Duration.zero;
+                return StreamBuilder<Duration>(
+                  stream: controller.positionStream,
+                  initialData: Duration.zero,
+                  builder: (context, positionSnap) {
+                    final position = positionSnap.data ?? Duration.zero;
+                    final max = duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0;
+                    final value = position.inMilliseconds.clamp(0, duration.inMilliseconds > 0 ? duration.inMilliseconds : 1).toDouble();
+                    return Column(
+                      children: [
+                        Slider(
+                          min: 0,
+                          max: max,
+                          value: value,
+                          onChanged: duration.inMilliseconds <= 0
+                              ? null
+                              : (v) => controller.seek(Duration(milliseconds: v.round())),
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(_time(position), style: Theme.of(context).textTheme.labelSmall),
+                            Text(_time(duration), style: Theme.of(context).textTheme.labelSmall),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 2),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'السورة السابقة',
+                  iconSize: 30,
+                  onPressed: controller.hasPrevious ? controller.previousSurah : null,
+                  icon: const Icon(Icons.skip_previous_rounded),
+                ),
+                IconButton(
+                  tooltip: 'رجوع 10 ثوانٍ',
+                  iconSize: 27,
+                  onPressed: controller.back10,
+                  icon: const Icon(Icons.replay_10_rounded),
+                ),
+                const SizedBox(width: 4),
+                FilledButton(
+                  onPressed: audio.isLoading
+                      ? null
+                      : () => audio.isPlaying ? controller.pause() : controller.resume(),
+                  style: FilledButton.styleFrom(
+                    shape: const CircleBorder(),
+                    padding: const EdgeInsets.all(13),
+                    minimumSize: const Size(54, 54),
+                  ),
+                  child: audio.isLoading
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                      : Icon(audio.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 30),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'تقديم 10 ثوانٍ',
+                  iconSize: 27,
+                  onPressed: controller.forward10,
+                  icon: const Icon(Icons.forward_10_rounded),
+                ),
+                IconButton(
+                  tooltip: 'السورة التالية',
+                  iconSize: 30,
+                  onPressed: controller.hasNext ? controller.nextSurah : null,
+                  icon: const Icon(Icons.skip_next_rounded),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class MoshafSurahsScreen extends ConsumerStatefulWidget {
   const MoshafSurahsScreen({super.key, required this.reciter, required this.moshaf});
   final Mp3QuranReciter reciter;
@@ -392,8 +540,12 @@ class _MoshafSurahsScreenState extends ConsumerState<MoshafSurahsScreen> {
           ),
         ],
       ),
-      body: surahsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+      body: Column(
+        children: [
+          const QuranAudioPlayerCard(),
+          Expanded(
+            child: surahsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => const Center(child: Text('تعذر تحميل أسماء السور')),
         data: (allSurahs) {
           final ids = widget.moshaf.surahList;
@@ -511,7 +663,10 @@ class _MoshafSurahsScreenState extends ConsumerState<MoshafSurahsScreen> {
               ),
             ],
           );
-        },
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

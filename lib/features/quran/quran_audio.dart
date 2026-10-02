@@ -14,18 +14,24 @@ import 'quran_audio_api.dart';
 class QuranAudioState {
   const QuranAudioState({
     this.currentKey,
+    this.currentTitle = '',
+    this.currentArtist = '',
     this.isPlaying = false,
     this.isLoading = false,
     this.error,
   });
 
   final String? currentKey;
+  final String currentTitle;
+  final String currentArtist;
   final bool isPlaying;
   final bool isLoading;
   final String? error;
 
   QuranAudioState copyWith({
     String? currentKey,
+    String? currentTitle,
+    String? currentArtist,
     bool? isPlaying,
     bool? isLoading,
     String? error,
@@ -33,6 +39,8 @@ class QuranAudioState {
   }) =>
       QuranAudioState(
         currentKey: currentKey ?? this.currentKey,
+        currentTitle: currentTitle ?? this.currentTitle,
+        currentArtist: currentArtist ?? this.currentArtist,
         isPlaying: isPlaying ?? this.isPlaying,
         isLoading: isLoading ?? this.isLoading,
         error: clearError ? null : (error ?? this.error),
@@ -54,7 +62,13 @@ class QuranAudioController extends StateNotifier<QuranAudioState> {
       final seq = _player.sequence;
       if (index == null || index < 0 || index >= seq.length) return;
       final tag = seq[index].tag;
-      if (tag is MediaItem) state = state.copyWith(currentKey: tag.id);
+      if (tag is MediaItem) {
+        state = state.copyWith(
+          currentKey: tag.id,
+          currentTitle: tag.title,
+          currentArtist: tag.artist ?? '',
+        );
+      }
     });
   }
 
@@ -63,6 +77,14 @@ class QuranAudioController extends StateNotifier<QuranAudioState> {
   late final StreamSubscription<PlayerState> _playerStateSub;
   late final StreamSubscription<int?> _indexSub;
   Uri? _art;
+
+  /// Streams used by the in-app player UI. The same AudioPlayer instance is
+  /// also connected to just_audio_background, so the notification and the UI
+  /// always control the same playback position.
+  Stream<Duration> get positionStream => _player.positionStream;
+  Stream<Duration?> get durationStream => _player.durationStream;
+  bool get hasNext => _player.hasNext;
+  bool get hasPrevious => _player.hasPrevious;
 
   String key(Mp3QuranMoshaf moshaf, int surahId) => '${moshaf.id}:$surahId';
 
@@ -154,6 +176,41 @@ class QuranAudioController extends StateNotifier<QuranAudioState> {
       return;
     }
     await play(moshaf, surahId, url, reciterName: reciterName, surahNames: surahNames);
+  }
+
+  Future<void> pause() => _player.pause();
+
+  Future<void> resume() => _player.play();
+
+  Future<void> seek(Duration position) async {
+    final duration = _player.duration;
+    if (duration == null) return;
+    final target = position < Duration.zero
+        ? Duration.zero
+        : (position > duration ? duration : position);
+    await _player.seek(target);
+  }
+
+  Future<void> seekBy(Duration delta) async {
+    await seek(_player.position + delta);
+  }
+
+  Future<void> back10() => seekBy(const Duration(seconds: -10));
+
+  Future<void> forward10() => seekBy(const Duration(seconds: 10));
+
+  Future<void> previousSurah() async {
+    if (_player.hasPrevious) {
+      await _player.seekToPrevious();
+      if (!_player.playing) await _player.play();
+    }
+  }
+
+  Future<void> nextSurah() async {
+    if (_player.hasNext) {
+      await _player.seekToNext();
+      if (!_player.playing) await _player.play();
+    }
   }
 
   Future<void> stop() async {
